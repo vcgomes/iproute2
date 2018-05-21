@@ -185,6 +185,13 @@ static inline __u64 rta_getattr_u64(const struct rtattr *rta)
 	memcpy(&tmp, RTA_DATA(rta), sizeof(__u64));
 	return tmp;
 }
+static inline __s32 rta_getattr_s32(const struct rtattr *rta)
+{
+	__s32 tmp;
+
+	memcpy(&tmp, RTA_DATA(rta), sizeof(__s32));
+	return tmp;
+}
 static inline __s64 rta_getattr_s64(const struct rtattr *rta)
 {
 	__s64 tmp;
