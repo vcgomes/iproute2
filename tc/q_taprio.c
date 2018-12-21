@@ -98,6 +98,10 @@ static const char *entry_cmd_to_str(__u8 cmd)
 	switch (cmd) {
 	case TC_TAPRIO_CMD_SET_GATES:
 		return "S";
+	case TC_TAPRIO_CMD_SET_AND_HOLD:
+		return "H";
+	case TC_TAPRIO_CMD_SET_AND_RELEASE:
+		return "R";
 	default:
 		return "Invalid";
 	}
@@ -107,6 +111,12 @@ static int str_to_entry_cmd(const char *str)
 {
 	if (strcmp(str, "S") == 0)
 		return TC_TAPRIO_CMD_SET_GATES;
+
+	if (strcmp(str, "H") == 0)
+		return TC_TAPRIO_CMD_SET_AND_HOLD;
+
+	if (strcmp(str, "R") == 0)
+		return TC_TAPRIO_CMD_SET_AND_RELEASE;
 
 	return -1;
 }
@@ -157,6 +167,7 @@ static int taprio_parse_opt(struct qdisc_util *qu, int argc,
 	struct tc_mqprio_qopt opt = { };
 	__s64 cycle_time_extension = 0;
 	struct list_head sched_entries;
+	__u32 frame_preemption = 0;
 	struct rtattr *tail, *l;
 	__s64 cycle_time = 0;
 	__s64 base_time = 0;
@@ -270,6 +281,19 @@ static int taprio_parse_opt(struct qdisc_util *qu, int argc,
 				PREV_ARG();
 				break;
 			}
+		} else if (strcmp(*argv, "frame-preemption") == 0) {
+			uint32_t frame_preemption;
+
+			NEXT_ARG();
+			if (frame_preemption) {
+				fprintf(stderr, "taprio: duplicate \"frame-preemption\" specification\n");
+				return -1;
+			}
+
+			if (get_u32(&frame_preemption, *argv, 10)) {
+				PREV_ARG();
+				break;
+			}
 		} else if (strcmp(*argv, "clockid") == 0) {
 			NEXT_ARG();
 			if (clockid != CLOCKID_INVALID) {
@@ -309,6 +333,10 @@ static int taprio_parse_opt(struct qdisc_util *qu, int argc,
 	if (cycle_time_extension)
 		addattr_l(n, 1024, TCA_TAPRIO_ATTR_SCHED_CYCLE_TIME_EXTENSION,
 			  &cycle_time_extension, sizeof(cycle_time_extension));
+
+	if (frame_preemption)
+		addattr_l(n, 1024, TCA_TAPRIO_ATTR_FRAME_PREEMPTION,
+			  &frame_preemption, sizeof(frame_preemption));
 
 	l = addattr_nest(n, 1024, TCA_TAPRIO_ATTR_SCHED_ENTRY_LIST | NLA_F_NESTED);
 
@@ -374,6 +402,7 @@ static int print_sched_list(FILE *f, struct rtattr *list)
 static int print_schedule(FILE *f, struct rtattr **tb)
 {
 	int64_t base_time = 0, cycle_time = 0, cycle_time_extension = 0;
+	uint32_t frame_preemption = 0;
 
 	if (tb[TCA_TAPRIO_ATTR_SCHED_BASE_TIME])
 		base_time = rta_getattr_s64(tb[TCA_TAPRIO_ATTR_SCHED_BASE_TIME]);
@@ -388,12 +417,18 @@ static int print_schedule(FILE *f, struct rtattr **tb)
 		cycle_time_extension = rta_getattr_s64(
 			tb[TCA_TAPRIO_ATTR_SCHED_CYCLE_TIME_EXTENSION]);
 
+	if (tb[TCA_TAPRIO_ATTR_FRAME_PREEMPTION])
+		frame_preemption = rta_getattr_u32(tb[TCA_TAPRIO_ATTR_FRAME_PREEMPTION]);
+
 	print_lluint(PRINT_ANY, "base_time", "\tbase-time %lld", base_time);
 
 	print_lluint(PRINT_ANY, "cycle_time", " cycle-time %lld", cycle_time);
 
 	print_lluint(PRINT_ANY, "cycle_time_extension",
 		     " cycle-time-extension %lld", cycle_time_extension);
+
+	print_lluint(PRINT_ANY, "frame_preemption",
+		     " frame-preemption %lx", frame_preemption);
 
 	print_sched_list(f, tb[TCA_TAPRIO_ATTR_SCHED_ENTRY_LIST]);
 
