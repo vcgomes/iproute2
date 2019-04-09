@@ -163,6 +163,7 @@ static struct sched_entry *create_entry(uint32_t gatemask, uint32_t interval, ui
 static int taprio_parse_opt(struct qdisc_util *qu, int argc,
 			    char **argv, struct nlmsghdr *n, const char *dev)
 {
+	__u32 offload_flags = UINT32_MAX;
 	__s32 clockid = CLOCKID_INVALID;
 	struct tc_mqprio_qopt opt = { };
 	__s64 cycle_time_extension = 0;
@@ -304,6 +305,17 @@ static int taprio_parse_opt(struct qdisc_util *qu, int argc,
 				explain_clockid(*argv);
 				return -1;
 			}
+		} else if (strcmp(*argv, "offload") == 0) {
+			NEXT_ARG();
+			if (offload_flags != UINT32_MAX) {
+				fprintf(stderr, "taprio: duplicate \"offload\" specification\n");
+				return -1;
+			}
+			if (get_u32(&offload_flags, *argv, 0)) {
+				PREV_ARG();
+				return -1;
+			}
+
 		} else if (strcmp(*argv, "help") == 0) {
 			explain();
 			return -1;
@@ -319,6 +331,9 @@ static int taprio_parse_opt(struct qdisc_util *qu, int argc,
 
 	if (clockid != CLOCKID_INVALID)
 		addattr_l(n, 1024, TCA_TAPRIO_ATTR_SCHED_CLOCKID, &clockid, sizeof(clockid));
+
+	if (offload_flags != UINT32_MAX)
+		addattr_l(n, 1024, TCA_TAPRIO_ATTR_OFFLOAD_FLAGS, &offload_flags, sizeof(offload_flags));
 
 	if (opt.num_tc > 0)
 		addattr_l(n, 1024, TCA_TAPRIO_ATTR_PRIOMAP, &opt, sizeof(opt));
@@ -402,7 +417,7 @@ static int print_sched_list(FILE *f, struct rtattr *list)
 static int print_schedule(FILE *f, struct rtattr **tb)
 {
 	int64_t base_time = 0, cycle_time = 0, cycle_time_extension = 0;
-	uint32_t frame_preemption = 0;
+	uint32_t frame_preemption = 0, offload_flags = 0;
 
 	if (tb[TCA_TAPRIO_ATTR_SCHED_BASE_TIME])
 		base_time = rta_getattr_s64(tb[TCA_TAPRIO_ATTR_SCHED_BASE_TIME]);
@@ -420,6 +435,9 @@ static int print_schedule(FILE *f, struct rtattr **tb)
 	if (tb[TCA_TAPRIO_ATTR_FRAME_PREEMPTION])
 		frame_preemption = rta_getattr_u32(tb[TCA_TAPRIO_ATTR_FRAME_PREEMPTION]);
 
+	if (tb[TCA_TAPRIO_ATTR_OFFLOAD_FLAGS])
+		offload_flags = rta_getattr_u32(tb[TCA_TAPRIO_ATTR_OFFLOAD_FLAGS]);
+
 	print_lluint(PRINT_ANY, "base_time", "\tbase-time %lld", base_time);
 
 	print_lluint(PRINT_ANY, "cycle_time", " cycle-time %lld", cycle_time);
@@ -429,6 +447,8 @@ static int print_schedule(FILE *f, struct rtattr **tb)
 
 	print_lluint(PRINT_ANY, "frame_preemption",
 		     " frame-preemption %lx", frame_preemption);
+
+	print_uint(PRINT_ANY, "offload", " offload %x", offload_flags);
 
 	print_sched_list(f, tb[TCA_TAPRIO_ATTR_SCHED_ENTRY_LIST]);
 
